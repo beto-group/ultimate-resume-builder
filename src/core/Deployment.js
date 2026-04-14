@@ -136,19 +136,35 @@ function getDeploymentLogic(dc) {
                 manifest: getRel(manifestPath) 
             });
 
-            // 0. Alpha-Bump & Auto-Bundle (BRAT Preparation)
+            // 0. Alpha-Bump & Native Transpilation (esbuild)
             let pushVersion = "1.0.0";
             const distPath = path.join(componentPath, "main.js");
-            const srcPath = path.join(componentPath, "src", "index.jsx");
+            const nativeEntry = path.join(componentPath, "src", "native", "main.jsx");
 
-            console.log("[Deployment] Auto-bundling core assets...");
-            if (fs.existsSync(srcPath)) {
-                fs.copyFileSync(srcPath, distPath);
-                console.log("[Deployment] main.js auto-generated from src/index.jsx");
-                addLog("AUTO_BUNDLING_SUCCESS");
-            } else if (!fs.existsSync(distPath)) {
-                console.warn("%c[Deployment] BRAT_FATAL: No source or binary found in root.", "color: #ef4444; font-weight: bold;");
-                addLog("BRAT_ASSET_MISSING");
+            console.log("[Deployment] Orchestrating Native Build (esbuild)...");
+            if (fs.existsSync(nativeEntry)) {
+                try {
+                    const { execSync } = require('child_process');
+                    // Use Login Shell to ensure npx/node are in PATH
+                    const buildCmd = `/bin/zsh -l -c "npx esbuild ${nativeEntry} --bundle --outfile=${distPath} --platform=node --external:obsidian --external:electron --format=cjs --loader:.jsx=jsx"`;
+                    console.log("[Deployment] Running Build Command...");
+                    execSync(buildCmd, { cwd: componentPath });
+                    
+                    if (fs.existsSync(distPath)) {
+                        console.log("[Deployment] ESBUILD_SUCCESS: Native bundle generated.");
+                        addLog("AUTO_BUNDLING_SUCCESS");
+                    }
+                } catch (e) {
+                    console.error("[Deployment] ESBUILD_FAILED:", e.message);
+                    addLog("AUTO_BUNDLING_FAILED");
+                    // Fallback to simple copy if esbuild fails (unlikely given check)
+                    const srcPath = path.join(componentPath, "src", "index.jsx");
+                    if (fs.existsSync(srcPath)) fs.copyFileSync(srcPath, distPath);
+                }
+            } else {
+                console.warn("[Deployment] NATIVE_ENTRY_MISSING: Falling back to source copy.");
+                const srcPath = path.join(componentPath, "src", "index.jsx");
+                if (fs.existsSync(srcPath)) fs.copyFileSync(srcPath, distPath);
             }
 
             if (fs.existsSync(manifestPath)) {
