@@ -1,6 +1,20 @@
 import { Plugin, ItemView } from 'obsidian';
-import * as React from 'react';
-import * as ReactDOM from 'react-dom/client';
+
+// 🛡️ HOST IDENTITY HIJACK: Borrow React/ReactDOM from the environment to prevent version mismatch #525
+let React, ReactDOM;
+try {
+    // 1. Try Obsidian/DataCore Global
+    React = window.React;
+    ReactDOM = window.ReactDOM;
+
+    // 2. Fallback to Environment Require (Obsidians internal loader)
+    if (!React && typeof require !== 'undefined') React = require('react');
+    if (!ReactDOM && typeof require !== 'undefined') {
+        try { ReactDOM = require('react-dom/client'); } catch(e) { ReactDOM = require('react-dom'); }
+    }
+} catch (e) {
+    console.error("[Dossier OS] IDENTITY_CRASH: Could not resolve host React.", e);
+}
 
 // 📡 CORE MODULE INJECTION (Static Bundle Force via Require)
 const Styles_Pkg = require('../core/Styles.js');
@@ -119,8 +133,16 @@ class DossierView extends ItemView {
         }
 
         const projectPath = "_RESOURCES/DATACORE/142_UltimateResumeBuilder";
+        
+        if (!ReactDOM || !ReactDOM.createRoot) {
+            console.error("[Dossier OS] RENDER_BLOCK: ReactDOM.createRoot is missing.");
+            container.setText("SYSTEM_FAILURE: React Identity Mismatch. Please check console.");
+            return;
+        }
+
         const root = ReactDOM.createRoot(container);
-        root.render(<App dc={dc} modules={modules} folderPath={projectPath} />);
+        root.render(React.createElement(App, { dc, modules, folderPath: projectPath }));
+        console.log("[Dossier OS] HOST_IDENTITY_SYNC_SUCCESS: Native render complete.");
     }
 }
 

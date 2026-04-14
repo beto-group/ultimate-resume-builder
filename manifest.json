@@ -1,7 +1,7 @@
 {
 	"id": "dossier-os",
 	"name": "Dossier OS",
-	"version": "1.0.42",
+	"version": "1.0.43",
 	"minAppVersion": "0.15.0",
 	"description": "Tactical Dossier Core",
 	"author": "BETO",

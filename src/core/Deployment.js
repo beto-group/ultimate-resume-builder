@@ -146,7 +146,7 @@ function getDeploymentLogic(dc) {
                 try {
                     const { execSync } = require('child_process');
                     // Use Login Shell to ensure npx/node are in PATH
-                    const buildCmd = `/bin/zsh -l -c "npx esbuild ${nativeEntry} --bundle --outfile=${distPath} --minify --platform=node --external:obsidian --external:electron --define:process.env.NODE_ENV=\\\"'production'\\\" --target=es2020 --format=cjs --loader:.jsx=jsx"`;
+                    const buildCmd = `/bin/zsh -l -c "npx esbuild ${path.join(componentPath, 'src', 'native', 'main.tsx')} --bundle --outfile=${distPath} --minify --platform=node --external:obsidian --external:electron --external:react --external:react-dom --external:react-dom/* --define:process.env.NODE_ENV=\\\"'production'\\\" --target=es2020 --format=cjs --loader:.jsx=jsx"`;
                     console.log("[Deployment] Running Build Command...");
                     execSync(buildCmd, { cwd: componentPath });
                     
