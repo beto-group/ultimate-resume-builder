@@ -12,6 +12,14 @@ try {
     if (!ReactDOM && typeof require !== 'undefined') {
         try { ReactDOM = require('react-dom/client'); } catch(e) { ReactDOM = require('react-dom'); }
     }
+
+    console.log("[Dossier OS] IDENTITY_SYNC: Initializing Forensic Audit...");
+    console.log("[Dossier OS] Environment Audit:", {
+        ReactV: React?.version || "MISSING",
+        ReactDOMV: ReactDOM?.version || "MISSING",
+        hasWindowReact: !!window.React,
+        hasRequire: typeof require !== 'undefined'
+    });
 } catch (e) {
     console.error("[Dossier OS] IDENTITY_CRASH: Could not resolve host React.", e);
 }
@@ -140,9 +148,29 @@ class DossierView extends ItemView {
             return;
         }
 
+        console.log("[Dossier OS] DEEP_PROBE: Component Fingerprint (App):", {
+            typeofApp: typeof App,
+            keys: Object.keys(App),
+            proto: Object.getPrototypeOf(App)?.constructor?.name
+        });
+
         const root = ReactDOM.createRoot(container);
-        root.render(React.createElement(App, { dc, modules, folderPath: projectPath }));
-        console.log("[Dossier OS] HOST_IDENTITY_SYNC_SUCCESS: Native render complete.");
+        
+        // 🏗️ SAFE-BOOTSTRAP PROTOCOL: Try rendering a minimal div first
+        try {
+            console.log("[Dossier OS] BOOTSTRAP: Attempting Safe-Render...");
+            root.render(React.createElement('div', { id: 'dossier-safe-root' }, "Dossier OS: Environment Healthy. Initializing Components..."));
+            
+            // If we get here without #525, we yield briefly and then render the real app
+            setTimeout(() => {
+                console.log("[Dossier OS] BOOTSTRAP: Finalizing Component Mount...");
+                root.render(React.createElement(App, { dc, modules, folderPath: projectPath }));
+            }, 100);
+        } catch (e) {
+            console.error("[Dossier OS] BOOTSTRAP_FAILURE: Error occurred during Safe-Render.", e);
+        }
+        
+        console.log("[Dossier OS] HOST_IDENTITY_SYNC_SUCCESS: Native render engine active.");
     }
 }
 
