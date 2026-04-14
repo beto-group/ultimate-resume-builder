@@ -1,110 +1,83 @@
 // ─────────────────────────────────────────────────────────────
-// 🚀 MODULE: DEPLOYMENT ENGINE (GitHub & Local Sync)
+// 🚀 CORE: UNIVERSAL DEPLOYMENT & GITOPS ORCHESTRATOR
 // ─────────────────────────────────────────────────────────────
 
-function getDeploymentLogic(dc) {
-    const { useState, useEffect, useCallback, useRef } = dc;
-    const { spawn } = require('child_process');
-    const fs = require('fs');
-    const path = require('path');
+const fs = require('fs');
+const path = require('path');
+const { exec } = require('child_process');
 
-    // Helper: Relativize paths for logs
-    const rel = (abs) => {
-        try {
-            const vaultPath = dc.app.vault.adapter.getBasePath();
-            return path.relative(vaultPath, abs);
-        } catch (e) { return abs; }
-    };
+function getDeploymentLogic(dc) {
+    const rel = (p) => p.split('DATACORE/')[1] || p;
 
     const handleLocalDeploy = async ({ addLog, setStatus, setIsDeploying, folderPath }) => {
         setIsDeploying(true);
-        setStatus("BUNDLING_NATIVE_CORE...");
-        addLog("LOCAL_DEPLOY_INIT");
+        setStatus("COMPILING...");
+        addLog("DEPLOY_INIT");
 
-        console.log(`[Deployment] Starting Local Deploy in: ${folderPath}`);
         try {
-            const vaultPath = dc.app.vault.adapter.getBasePath();
-            // Ensure folderPath is used to resolve componentPath
-            const componentPath = path.resolve(vaultPath, folderPath);
-            const livePath = path.resolve(vaultPath, ".obsidian/plugins/dossier-os");
-            const manifestPath = path.join(componentPath, "manifest.json");
-            const nodeModulesPath = path.join(componentPath, "node_modules");
+            const vault = dc.app.vault;
+            const adapter = vault.adapter;
+            const vaultPath = adapter.getBasePath();
 
-            console.log("[Deployment] Paths Resolved (Relative):", { 
+            // 1. Resolve Paths
+            const componentPath = path.resolve(vaultPath, folderPath);
+            const pluginPath = path.join(vaultPath, ".obsidian", "plugins", "dossier-os");
+            const mainJsPath = path.join(pluginPath, "main.js");
+            const manifestPath = path.join(pluginPath, "manifest.json");
+
+            console.log("[Deployment] Paths Resolved:", { 
                 component: rel(componentPath), 
-                live: rel(livePath), 
-                manifest: rel(manifestPath) 
+                plugin: rel(pluginPath) 
             });
 
-            // 1. Version Management
-            let currentVersion = "1.0.0";
-            if (fs.existsSync(manifestPath)) {
-                try {
-                    const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-                    const parts = m.version.split('.');
-                    parts[2] = parseInt(parts[2] || 0) + 1;
-                    currentVersion = parts.join('.');
-                    m.version = currentVersion;
-                    fs.writeFileSync(manifestPath, JSON.stringify(m, null, '\t'));
-                    addLog(`BUMP_V${currentVersion}`);
-                    console.log(`[Deployment] Version bumped: v${currentVersion}`);
-                } catch (e) { 
-                    console.error("[Deployment] Version bump error:", e);
-                    addLog("VERSION_BUMP_FAILED"); 
-                }
-            } else {
-                console.log("[Deployment] Initializing manifest...");
-                const initialManifest = {
-                    id: "dossier-os",
-                    name: "Dossier OS",
-                    version: currentVersion,
-                    minAppVersion: "0.15.0",
-                    description: "Tactical Dossier Core",
-                    author: "BETO",
-                    isDesktopOnly: true
-                };
-                fs.writeFileSync(manifestPath, JSON.stringify(initialManifest, null, '\t'));
-                addLog("CREATED_MANIFEST");
+            // 2. Ensure Plugin Directory
+            if (!fs.existsSync(pluginPath)) {
+                fs.mkdirSync(pluginPath, { recursive: true });
+                console.log("[Deployment] Created plugin directory.");
             }
 
-            // 2. Build Pipeline (with Self-Contained Dependency Check)
-            const hasReact = fs.existsSync(path.join(nodeModulesPath, "react"));
-            const installCmd = hasReact ? "echo 'React ready.'" : "echo 'Installing local dependencies...' && npm install react react-dom --no-package-lock";
-            
-            const cmd = `
-                ${installCmd} &&
-                mkdir -p "${livePath}" && 
-                npx -y esbuild src/native/main.jsx --bundle --outfile="${livePath}/main.js" --platform=browser --minify --define:process.env.NODE_ENV=\\"production\\" --external:obsidian --external:electron --external:child_process --external:fs --external:path --format=cjs --loader:.jsx=jsx --inject:src/native/react-shim.js --jsx-factory=React.createElement --jsx-fragment=React.Fragment && 
-                cp "${manifestPath}" "${livePath}/manifest.json" &&
-                (obsidian eval code="(async () => { await app.plugins.loadManifests(); if(app.plugins.manifests['dossier-os']) { await app.plugins.disablePlugin('dossier-os'); await app.plugins.enablePlugin('dossier-os'); console.log('Dossier OS Reinitialized'); } else { console.error('Manifest not found after load'); } })()" || true)
+            // 3. Manifest Synchronization
+            const componentManifest = path.join(componentPath, "manifest.json");
+            if (fs.existsSync(componentManifest)) {
+                fs.copyFileSync(componentManifest, manifestPath);
+                console.log("[Deployment] Manifest Synced.");
+                addLog("MANIFEST_SYNCED");
+            }
 
-            `.trim().replace(/\n/g, '');
-
-
-            console.log("[Deployment] Executing Pipe (Relative Context)...");
-
-            const child = spawn('/bin/zsh', ['-l', '-c', cmd], { cwd: componentPath });
-            
-            child.stdout.on('data', d => console.log("[Deployment] [STDOUT]", d.toString()));
-            child.stderr.on('data', d => console.error("[Deployment] [STDERR]", d.toString()));
-
-            child.on('close', (code) => {
-                setIsDeploying(false);
-                if (code === 0) {
-                    console.log("[Deployment] Local deploy SUCCESS");
-                    setStatus("DEPLOY_SUCCESS v" + currentVersion);
-                    addLog("NATIVE_OS_ACTIVE");
-                } else {
-                    console.error("[Deployment] Local deploy FAILED (Exit Code:", code, ")");
-                    setStatus("DEPLOY_FAIL");
-                    addLog(`ERROR_CODE_${code}`);
+            // 4. Source Bundle Preparation
+            // In Datacore context, we use the pre-built main.js if it exists, or the index.jsx
+            const sourceMain = path.join(componentPath, "main.js");
+            if (fs.existsSync(sourceMain)) {
+                fs.copyFileSync(sourceMain, mainJsPath);
+            } else {
+                // Fallback to direct copy for simple deployments
+                const srcPath = path.join(componentPath, "src", "index.jsx");
+                if (fs.existsSync(srcPath)) {
+                    fs.copyFileSync(srcPath, mainJsPath);
                 }
-            });
-        } catch (e) {
-            console.error("[Deployment] Local deploy EXCEPTION:", e);
-            setStatus("EXCEPTION_LOGGED");
-            addLog(e.message);
+            }
+
+            console.log("[Deployment] Bundle Injected to Dossier OS.");
+            addLog("BUNDLE_INJECTED");
+
+            // 5. Trigger Obsidian Reload
+            if (dc.app.plugins) {
+                const pluginId = "dossier-os";
+                await dc.app.plugins.disablePlugin(pluginId);
+                await dc.app.plugins.enablePlugin(pluginId);
+                console.log("[Deployment] Dossier OS Reinitialized");
+                addLog("PLUGIN_RELOADED");
+            }
+
+            setStatus("IDLE");
             setIsDeploying(false);
+            addLog("DEPLOY_SUCCESS");
+
+        } catch (e) {
+            console.error("[Deployment] Local deploy FAILED:", e);
+            setStatus("DEPLOY_ERROR");
+            setIsDeploying(false);
+            addLog("DEPLOY_CRASH");
         }
     };
 
@@ -155,9 +128,12 @@ function getDeploymentLogic(dc) {
             const manifestPath = path.join(componentPath, "manifest.json");
             const req = window.requestUrl || dc.app.requestUrl;
 
+            // 🛠️ ROBUST PATH LOGGING
+            const getRel = (p) => path.relative(vaultPath, p);
+
             console.log("[Deployment] Paths Resolved (Relative):", { 
-                component: rel(componentPath), 
-                manifest: rel(manifestPath) 
+                component: getRel(componentPath), 
+                manifest: getRel(manifestPath) 
             });
 
             // 0. Auto-Bump Version for Publish
@@ -196,10 +172,65 @@ function getDeploymentLogic(dc) {
             const { login } = userRes.json;
             console.log(`[Deployment] Authenticated as: ${login}`);
             
+            // 2. Repository Existence Check & Auto-Provisioning
+            console.log(`[Deployment] Verifying repository: ${login}/${repoName}`);
+            let needsCreation = false;
+            try {
+                const repoCheckRes = await req({
+                    url: `https://api.github.com/repos/${login}/${repoName}`,
+                    method: 'GET',
+                    headers: { 
+                        'Authorization': `token ${activeToken}`, 
+                        'Accept': 'application/vnd.github.v3+json' 
+                    }
+                });
+                if (repoCheckRes.status === 404) needsCreation = true;
+                else if (repoCheckRes.status !== 200) {
+                    console.warn("[Deployment] Repo check warning (Status:", repoCheckRes.status, ")");
+                }
+            } catch (e) {
+                // Handle cases where requestUrl throws on 404
+                if (e.message?.includes("404") || e.status === 404) {
+                    console.log("[Deployment] 404 Signal Caught (Repo Missing)");
+                    needsCreation = true;
+                } else {
+                    console.error("[Deployment] Repo check CRASH:", e);
+                    throw e;
+                }
+            }
+
+            if (needsCreation) {
+                console.log(`[Deployment] Repo missing. Auto-provisioning: ${repoName}...`);
+                addLog("PROVISIONING_REPO");
+                const createRepoRes = await req({
+                    url: 'https://api.github.com/user/repos',
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `token ${activeToken}`, 
+                        'Content-Type': 'application/json' 
+                    },
+                    body: JSON.stringify({
+                        name: repoName,
+                        description: "Cinematic Dossier OS // Generated by Ultimate Resume Builder.",
+                        private: false,
+                        has_issues: true,
+                        has_projects: false,
+                        has_wiki: false
+                    })
+                });
+
+                if (createRepoRes.status !== 201) {
+                    console.error("[Deployment] Repo creation FAILED:", createRepoRes.json);
+                    throw new Error("PROVISIONING_FAILED");
+                }
+                console.log("[Deployment] Repository Created successfully.");
+                addLog("PROVISION_SUCCESS");
+            }
+
             const authedUrl = `https://${activeToken}@github.com/${login}/${repoName}.git`;
             const tag = `v${pushVersion}`;
 
-            // 2. Git Pipeline
+            // 3. Git Pipeline
             const cmd = `
                 git init && 
                 git config user.name "${login}" && 
@@ -207,65 +238,58 @@ function getDeploymentLogic(dc) {
                 git add -A && 
                 (git commit -m "Dossier Update [${tag}]" --allow-empty || true) && 
                 git branch -M main && 
-                (git remote add origin "${authedUrl}" 2>/dev/null || git remote set-url origin "${authedUrl}") && 
+                (git remote add origin ${authedUrl} || git remote set-url origin ${authedUrl}) && 
                 git push -u origin main --force
-            `.trim().replace(/\n/g, '');
+            `;
 
             console.log("[Deployment] Executing Git Push...");
+            setStatus("GITOPS_PUSHING...");
+            addLog("GIT_START");
 
-            const child = spawn('/bin/zsh', ['-l', '-c', cmd], { cwd: componentPath });
-            
-            child.stdout.on('data', d => console.log("[Deployment] [GIT]", d.toString()));
-            child.stderr.on('data', d => console.error("[Deployment] [GIT_ERR]", d.toString()));
+            const child = exec(cmd, { cwd: componentPath });
+            child.stdout.on('data', (d) => console.log("[Deployment] [STDOUT]", d));
+            child.stderr.on('data', (d) => console.warn("[Deployment] [STDERR]", d));
 
             child.on('close', async (code) => {
-                if (code !== 0) { 
-                    console.error("[Deployment] Git FAILED (Exit Code:", code, ")");
-                    setStatus("Push Failed"); 
-                    setIsPublishing(false); 
-                    return; 
-                }
-                
-                console.log("[Deployment] Git Push SUCCESS. Synchronizing release...");
-                setStatus(`Syncing Release ${tag}...`);
-                addLog("CREATING_GITHUB_RELEASE");
-                
-                try {
-                    // Create Release
-                    const createRes = await req({
-                        url: `https://api.github.com/repos/${login}/${repoName}/releases`,
-                        method: 'POST',
-                        headers: { 
-                            'Authorization': `token ${activeToken}`, 
-                            'Content-Type': 'application/json' 
-                        },
-                        body: JSON.stringify({ tag_name: tag, name: `Resume Dossier ${tag}`, body: "Automated Cinematic Export.", draft: false })
-                    });
+                if (code === 0) {
+                    console.log("[Deployment] Git Push SUCCESS");
+                    addLog("GIT_SUCCESS");
                     
-                    if (createRes.status === 201) {
-                        console.log(`[Deployment] Release created: ${tag}`);
-                        addLog("RELEASE_SUCCESS");
-                    } else {
-                        console.error("[Deployment] Release FAILED (Status:", createRes.status, ")");
-                        addLog(`RELEASE_STATUS_${createRes.status}`);
+                    // Trigger Release Creation
+                    try {
+                        console.log("[Deployment] Creating Release Tag...");
+                        const createRes = await req({
+                            url: `https://api.github.com/repos/${login}/${repoName}/releases`,
+                            method: 'POST',
+                            headers: { 
+                                'Authorization': `token ${activeToken}`, 
+                                'Content-Type': 'application/json' 
+                            },
+                            body: JSON.stringify({ tag_name: tag, name: `Resume Dossier ${tag}`, body: "Automated Cinematic Export.", draft: false })
+                        });
+                        
+                        if (createRes.status === 201) addLog("RELEASE_READY");
+                    } catch (e) {
+                        console.error("[Deployment] Release creation failed:", e);
                     }
 
-                    setStatus("Published " + tag);
+                    setStatus("IDLE");
+                    setIsPublishing(false);
                     addLog("PUBLISH_COMPLETE");
+                } else {
+                    console.error("[Deployment] Git FAILED (Exit Code:", code, ")");
+                    setStatus("GIT_ERROR");
                     setIsPublishing(false);
-                } catch (err) {
-                    console.error("[Deployment] Release EXCEPTION:", err);
-                    addLog(`RELEASE_ERR: ${err.message}`);
-                    setStatus("Push Success, Release Fail");
-                    setIsPublishing(false);
+                    addLog("GIT_FAILURE");
                 }
             });
-        } catch (e) { 
-            console.error("[Deployment] Public sync EXCEPTION:", e);
-            setStatus("Error: " + e.message); 
-            setIsPublishing(false); 
-        }
 
+        } catch (e) {
+            console.error("[Deployment] Public sync EXCEPTION:", e);
+            setStatus("SYNC_ERROR");
+            setIsPublishing(false);
+            addLog("PUBLISH_CRASH");
+        }
     };
 
     return { handleLocalDeploy, handlePublish };
@@ -274,6 +298,3 @@ function getDeploymentLogic(dc) {
 const _exports = { getDeploymentLogic };
 if (typeof module !== 'undefined' && module.exports) module.exports = _exports;
 return _exports;
-
-
-

@@ -78,11 +78,13 @@ async function View({ folderPath }) {
 
                     const modules = {
                         ...styles, ...parser, ...nodeGraph, ...visuals, ...content, 
-                        ...floatingScene, ...deployment, ...loadScript, ...adapterModule,
+                        ...floatingScene, ...loadScript, ...adapterModule,
+                        getDeploymentLogic: deployment.getDeploymentLogic,
                         TravelGlobeWidget: globeModule.TravelGlobeWidget,
                         HyperScroll: hsModule.HyperScroll,
                         TimelineSlide: timelineModule.TimelineSlide,
-                        DeployBridge: bridgeModule.DeployBridge
+                        DeployBridge: bridgeModule.DeployBridge,
+                        MCPBridge: bridgeModule.MCPBridge
                     };
 
                     setApp({ Component: appModule.App, modules });
