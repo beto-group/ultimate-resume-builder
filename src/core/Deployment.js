@@ -265,22 +265,97 @@ function getDeploymentLogic(dc) {
                     console.log("[Deployment] Git Push SUCCESS");
                     addLog("GIT_SUCCESS");
                     
-                    // Trigger Release Creation
+                    // 4. Trigger Release Creation & Asset Upload (Native Grab Protocol)
                     try {
-                        console.log("[Deployment] Creating Release Tag...");
-                        const createRes = await req({
-                            url: `https://api.github.com/repos/${login}/${repoName}/releases`,
-                            method: 'POST',
+                        const tag = `v${pushVersion}`;
+                        console.log(`[Deployment] Syncing Release Assets for ${tag}...`);
+                        
+                        // Check for Existing Release
+                        const checkRes = await req({
+                            url: `https://api.github.com/repos/${login}/${repoName}/releases/tags/${tag}?t=${Date.now()}`,
                             headers: { 
                                 'Authorization': `token ${activeToken}`, 
-                                'Content-Type': 'application/json' 
-                            },
-                            body: JSON.stringify({ tag_name: tag, name: `Resume Dossier ${tag}`, body: "Automated Cinematic Export.", draft: false })
+                                'Accept': 'application/vnd.github.v3+json',
+                                'Cache-Control': 'no-cache'
+                            }
                         });
+
+                        let release;
+                        if (checkRes.status === 200) {
+                            release = checkRes.json;
+                            console.log("[Deployment] Existing release found. Updating assets...");
+                        } else {
+                            // Create New Release
+                            console.log("[Deployment] Creating new release...");
+                            const createRes = await req({
+                                url: `https://api.github.com/repos/${login}/${repoName}/releases`,
+                                method: 'POST',
+                                headers: { 
+                                    'Authorization': `token ${activeToken}`, 
+                                    'Content-Type': 'application/json' 
+                                },
+                                body: JSON.stringify({ 
+                                    tag_name: tag, 
+                                    name: `Resume Dossier ${tag}`, 
+                                    body: "Automated Resilient Release (Native Grab).", 
+                                    draft: false 
+                                })
+                            });
+                            release = createRes.json;
+                        }
+
+                        if (!release || !release.upload_url) throw new Error("Could not find release target.");
+                        const uploadUrl = release.upload_url.split('{')[0];
+
+                        // Purge Stale Assets
+                        if (release.assets && release.assets.length > 0) {
+                            const targets = ['main.js', 'manifest.json', 'styles.css'];
+                            for (const asset of release.assets) {
+                                if (targets.includes(asset.name)) {
+                                    console.log(`[Deployment] Purging stale asset: ${asset.name}`);
+                                    try {
+                                        await req({
+                                            url: `https://api.github.com/repos/${login}/${repoName}/releases/assets/${asset.id}`,
+                                            method: 'DELETE',
+                                            headers: { 'Authorization': `token ${activeToken}` }
+                                        });
+                                    } catch (e) { /* Skip */ }
+                                }
+                            }
+                        }
+
+                        // Upload Binary Assets
+                        const assets = [
+                            { name: 'main.js', path: path.join(componentPath, 'main.js') },
+                            { name: 'manifest.json', path: path.join(componentPath, 'manifest.json') }
+                        ];
+
+                        for (const asset of assets) {
+                            if (fs.existsSync(asset.path)) {
+                                console.log(`[Deployment] Uploading binary asset: ${asset.name}`);
+                                addLog(`UPLOAD_${asset.name.toUpperCase()}`);
+                                
+                                const fileData = fs.readFileSync(asset.path);
+                                const uploadRes = await req({
+                                    url: `${uploadUrl}?name=${asset.name}`,
+                                    method: 'POST',
+                                    headers: { 
+                                        'Authorization': `token ${activeToken}`, 
+                                        'Content-Type': 'application/octet-stream' 
+                                    },
+                                    body: new Uint8Array(fileData).buffer
+                                });
+                                
+                                if (uploadRes.status === 201) {
+                                    console.log(`[Deployment] Asset ${asset.name} uploaded successfully.`);
+                                }
+                            }
+                        }
                         
-                        if (createRes.status === 201) addLog("RELEASE_READY");
+                        addLog("RELEASE_READY");
                     } catch (e) {
-                        console.error("[Deployment] Release creation failed:", e);
+                        console.error("[Deployment] Release Asset Sync FAILED:", e);
+                        addLog("RELEASE_SYNC_FAILED");
                     }
 
                     setStatus("IDLE");
