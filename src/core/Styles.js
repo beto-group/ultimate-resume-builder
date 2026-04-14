@@ -405,7 +405,85 @@ const GLOBAL_CSS = `
         color: var(--urb-print-text) !important; 
         border-color: rgba(0,0,0,0.1) !important; 
     }
-    body.urb-theme-light .urb-print-grid { background-color: transparent !important; }
+    /* 🛰️ HUD REFINEMENT: COMMAND STRIP */
+    .urb-hud-strip {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap !important;
+        align-items: center;
+        gap: 4px;
+        background: rgba(15, 15, 20, 0.45);
+        backdrop-filter: blur(25px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 5px 8px;
+        border-radius: 40px;
+        transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 4px 30px rgba(0,0,0,0.6);
+        min-width: max-content;
+    }
+
+    .urb-hud-strip:hover {
+        background: rgba(20, 20, 25, 0.75);
+        border-color: rgba(255, 255, 255, 0.15);
+        box-shadow: 0 15px 45px rgba(0,0,0,1);
+    }
+
+    .urb-icon-btn {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: transparent;
+        border: 1px solid transparent;
+        color: rgba(255, 255, 255, 0.55);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .urb-icon-btn:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: white;
+        transform: translateY(-2px);
+    }
+
+    .urb-icon-btn.active {
+        color: var(--accent);
+        background: rgba(168, 85, 247, 0.15);
+        border-color: rgba(168, 85, 247, 0.25);
+    }
+
+    .urb-icon-btn.primary { color: #10b981; }
+    .urb-icon-btn.web { color: #3b82f6; }
+    .urb-icon-btn.danger { color: #ef4444; }
+
+    /* 🛰️ TOOLTIP ENGINE: Forensic Labeling (JS MANAGED) */
+    .urb-tooltip-js {
+        position: absolute;
+        top: -35px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(5, 5, 8, 0.95);
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 8px;
+        font-family: var(--font-mono);
+        color: var(--accent);
+        white-space: nowrap;
+        border: 1px solid rgba(168, 85, 247, 0.3);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.8);
+        z-index: 30000;
+        letter-spacing: 1px;
+        pointer-events: none;
+    }
+
+    @keyframes urb-pulse-dot {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.4; transform: scale(0.6); }
+    }
 }
 
 `;

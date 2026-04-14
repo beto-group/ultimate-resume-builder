@@ -55,6 +55,8 @@ async function View({ folderPath }) {
             const load = async () => {
                 try {
                     const base = "_RESOURCES/DATACORE/142_UltimateResumeBuilder/src";
+                    const v = Date.now(); // 🛰️ CACHE_BUSTER: Force DataCore to re-fetch on every mount
+                    
                     const [
                         styles, parser, nodeGraph, visuals, content, floatingScene, 
                         deployment, loadScript, appModule, globeModule, hsModule, 
@@ -72,13 +74,15 @@ async function View({ folderPath }) {
                         dc.require(`${base}/components/TravelGlobeWidget.jsx`),
                         dc.require(`${base}/components/HyperScroll.jsx`),
                         dc.require(`${base}/components/TimelineSlide.jsx`),
-                        dc.require(`${base}/core/PlatformAdapter.js`),
+                        dc.require(`${base}/core/PlatformAdapter.jsx`),
                         dc.require(`${base}/components/DeployBridge.jsx`)
                     ]);
 
                     const modules = {
                         ...styles, ...parser, ...nodeGraph, ...visuals, ...content, 
-                        ...floatingScene, ...loadScript, ...adapterModule,
+                        ...floatingScene, ...loadScript,
+                        Platform: adapterModule.Platform,
+                        createAdapter: adapterModule.createAdapter,
                         getDeploymentLogic: deployment.getDeploymentLogic,
                         TravelGlobeWidget: globeModule.TravelGlobeWidget,
                         HyperScroll: hsModule.HyperScroll,

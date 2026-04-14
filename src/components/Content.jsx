@@ -123,8 +123,9 @@ function CardBody({ node, TOKENS }) {
 }
 
 // 🛰️ SUB-COMPONENT: DUAL-PANEL SLIDE (Silent Narrative + Intelligence)
-function DualPanelSlide({ node, dc, TOKENS }) {
-    const { useEffect, useState, useRef } = dc;
+function DualPanelSlide({ node, dc, modules, TOKENS }) {
+    const { Platform } = modules;
+    const { useEffect, useState, useRef } = Platform;
     const [videoUrl, setVideoUrl] = useState(null);
 
     useEffect(() => {
@@ -193,7 +194,7 @@ function CinematicViewer({ node, TOKENS, dc }) {
 
     // Use Dual-Panel layout for slides with video or text panels
     if (node.panelVideo || node.panelText) {
-        return <DualPanelSlide node={node} dc={dc} TOKENS={TOKENS} />;
+        return <DualPanelSlide node={node} dc={dc} modules={modules} TOKENS={TOKENS} />;
     }
     
     return (
@@ -206,9 +207,10 @@ function CinematicViewer({ node, TOKENS, dc }) {
     );
 }
 
-function PrintLayout({ data, TOKENS, dc }) {
+function PrintLayout({ data, TOKENS, dc, modules }) {
     if (!data) return null;
-    const { useMemo } = dc;
+    const { Platform } = modules;
+    const { useMemo } = Platform;
     
     // 🚀 NUCLEAR PERFORMANCE: Memoized data aggregation to prevent HUD lag
     const nodes = data.nodes || [];

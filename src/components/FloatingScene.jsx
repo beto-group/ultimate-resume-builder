@@ -1,5 +1,6 @@
 function FloatingScene({ node, nodes, scroll, activeTab, isAutoPlay, dc, modules, TOKENS }) {
-    const { useEffect, useRef, useState, useMemo } = dc;
+    const { Platform } = modules;
+    const { useEffect, useRef, useState, useMemo } = Platform;
     const { THREE, gsap, TravelGlobeWidget } = modules;
     const containerRef = useRef(null);
     const sceneRefs = useRef({

@@ -396,7 +396,66 @@ function getDeploymentLogic(dc) {
         }
     };
 
-    return { handleLocalDeploy, handlePublish };
+    const handleWebPublish = async ({ addLog, setStatus, setIsPublishing, folderPath }) => {
+        setIsPublishing(true);
+        setStatus("WEB_SYNC_INIT...");
+        addLog("WEB_PUBLISH_START");
+
+        try {
+            const vaultPath = dc.app.vault.adapter.getBasePath();
+            const componentPath = path.resolve(vaultPath, folderPath);
+            const websitePath = path.resolve(vaultPath, "_RESOURCES/DATACORE/76 NextWebsite");
+            const targetPath = path.join(websitePath, "src/datacore/UltimateResumeBuilder");
+
+            console.log("[Deployment] [WEB] Paths Resolved:", { 
+                source: rel(componentPath), 
+                target: rel(targetPath) 
+            });
+
+            if (!fs.existsSync(websitePath)) {
+                console.error("[Deployment] [WEB] Website project not found at:", websitePath);
+                throw new Error("WEBSITE_PROJECT_MISSING");
+            }
+
+            // 1. Source Mirroring (Sync src folder)
+            const { execSync } = require('child_process');
+            addLog("SYNCING_SOURCE");
+            if (!fs.existsSync(targetPath)) fs.mkdirSync(targetPath, { recursive: true });
+            
+            // Clean & Copy
+            execSync(`rm -rf "${targetPath}" && cp -R "${path.join(componentPath, 'src')}" "${targetPath}"`);
+            console.log("[Deployment] [WEB] Source mirrored to website.");
+
+            // 2. Trigger Website Shim & Patch (Transpilation Bridge)
+            setStatus("BUILDING_WEB_SHIM...");
+            addLog("SHIM_START");
+            execSync(`/bin/zsh -l -c "npm run shim && npm run patch"`, { cwd: websitePath });
+            console.log("[Deployment] [WEB] Website shim & patch completed.");
+
+            // 3. Git Ops for Web Repo
+            setStatus("GITOPS_PUSH_WEB...");
+            addLog("WEB_GIT_START");
+            const gitCmd = `
+                git add -A && 
+                git commit -m "Dossier Sync: UltimateResumeBuilder Update [Auto-Generated]" && 
+                git push origin main
+            `;
+            execSync(gitCmd, { cwd: websitePath });
+            console.log("[Deployment] [WEB] Git Push SUCCESS");
+
+            setStatus("IDLE");
+            setIsPublishing(false);
+            addLog("WEB_PUBLISH_SUCCESS");
+
+        } catch (e) {
+            console.error("[Deployment] Web Publish FAILED:", e);
+            setStatus("WEB_PUBLISH_ERROR");
+            setIsPublishing(false);
+            addLog("WEB_PUBLISH_CRASH");
+        }
+    };
+
+    return { handleLocalDeploy, handlePublish, handleWebPublish };
 }
 
 const _exports = { getDeploymentLogic };

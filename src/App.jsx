@@ -3,7 +3,8 @@
 // ─────────────────────────────────────────────────────────────
 
 function App({ dc, modules, folderPath, onExport }) {
-    const { useState, useEffect, useRef, useCallback, useMemo } = dc;
+    const { Platform } = modules;
+    const { useState, useEffect, useRef, useCallback, useMemo } = Platform;
 
     const { TOKENS, GLOBAL_CSS, parseResumeMarkdown, NodeGraph, GeometricParticles, CinematicViewer, FloatingScene, PrintLayout, DeployBridge, MCPBridge } = modules;
     const adapter = useMemo(() => modules.createAdapter(dc, modules), [dc, modules]);
@@ -55,7 +56,7 @@ function App({ dc, modules, folderPath, onExport }) {
 
     const updateToken = async (val) => {
         setGhToken(val);
-        const storage = dc.app.secretStorage || window.app?.secretStorage;
+        const storage = dc?.app?.secretStorage || window.app?.secretStorage;
         if (storage && typeof storage.setSecret === 'function') await storage.setSecret('urb-github-token', val);
     };
 
@@ -71,7 +72,7 @@ function App({ dc, modules, folderPath, onExport }) {
     }, [deploymentLogic, addLog, setStatus, folderPath]);
 
     const handlePublish = useCallback(async () => {
-        console.log("%c[App] COMMAND: PUBLISH_WEB", "background: #10b981; color: #fff; font-weight: bold; padding: 2px 5px; border-radius: 2px;");
+        console.log("%c[App] COMMAND: PUBLISH_NATIVE", "background: #10b981; color: #fff; font-weight: bold; padding: 2px 5px; border-radius: 2px;");
         await deploymentLogic.handlePublish({
             repoName,
             ghToken,
@@ -81,6 +82,16 @@ function App({ dc, modules, folderPath, onExport }) {
             folderPath
         });
     }, [deploymentLogic, repoName, ghToken, addLog, setStatus, folderPath]);
+
+    const handleWebPublish = useCallback(async () => {
+        console.log("%c[App] COMMAND: PUBLISH_WEB", "background: #3b82f6; color: #fff; font-weight: bold; padding: 2px 5px; border-radius: 2px;");
+        await deploymentLogic.handleWebPublish({
+            addLog,
+            setStatus,
+            setIsPublishing,
+            folderPath
+        });
+    }, [deploymentLogic, addLog, setStatus, folderPath]);
 
     const showHud = useCallback(() => {
         if (hudTimeoutRef.current) clearTimeout(hudTimeoutRef.current);
@@ -136,7 +147,7 @@ function App({ dc, modules, folderPath, onExport }) {
             } catch (e) { console.error("[URB] Dependency load failed:", e); }
 
             // 2. Authentication (Priority: SecretStorage -> Keychain Fallback)
-            const storage = dc.app.secretStorage || window.app?.secretStorage;
+            const storage = dc?.app?.secretStorage || window.app?.secretStorage;
             let token = "";
             let source = "NONE";
 
@@ -185,7 +196,12 @@ function App({ dc, modules, folderPath, onExport }) {
     useEffect(() => {
         async function loadData() {
             try {
-                const vault = dc.app.vault;
+                const vault = dc?.app?.vault;
+                if (!vault) {
+                    // 🌐 Web Fallback: Load from local JSON/MD if on web
+                    console.log("[URB] Web Environment detected. Skipping Vault read.");
+                    return;
+                }
                 const path = `_RESOURCES/DATACORE/142_UltimateResumeBuilder/_resources/data/resume.md`;
                 let text = "";
                 if (await vault.adapter.exists(path)) text = await vault.adapter.read(path);
@@ -212,6 +228,7 @@ function App({ dc, modules, folderPath, onExport }) {
 
     // [SKILL] FULLTAB DOM REPARENTING: Force UI to expand to workspace leaf
     useEffect(() => {
+        if (Platform.type === 'web') return; // Skip in web env
         const settleTimeout = setTimeout(() => {
             console.log("[URB] Initiating FullTab Reparenting...");
             if (!containerRef.current) return;
@@ -265,6 +282,12 @@ function App({ dc, modules, folderPath, onExport }) {
             document.body.classList.remove('urb-is-printing');
             setStatus("ERROR_HOIST");
         }
+    };
+
+    const [hoveredBtn, setHoveredBtn] = useState(null);
+    const renderTooltip = (label) => {
+        if (hoveredBtn !== label) return null;
+        return <div className="urb-tooltip-js fade-in">{label}</div>;
     };
 
     if (!resumeData) return <div style={{ color: 'white', padding: 20 }}>Initializing Elite Resume Interface...</div>;
@@ -384,7 +407,7 @@ function App({ dc, modules, folderPath, onExport }) {
                                     transform: isZoomed ? 'scale(1)' : 'scale(0.32)' 
                                 }}>
                                     <div className="urb-print-area">
-                                        <PrintLayout data={resumeData} TOKENS={TOKENS} dc={dc} />
+                                        <PrintLayout data={resumeData} TOKENS={TOKENS} dc={dc} modules={modules} />
                                     </div>
                                 </div>
                             </div>
@@ -403,85 +426,98 @@ function App({ dc, modules, folderPath, onExport }) {
                         zIndex: 20000, 
                         display: 'flex', 
                         flexDirection: 'column',
-                        padding: '30px 40px 60px 40px', 
-                        background: 'linear-gradient(to bottom, rgba(5,5,8,0.95) 0%, rgba(5,5,8,0.4) 40%, transparent 100%)',
-                        backdropFilter: 'blur(25px) saturate(180%)',
-                        borderBottom: `1px solid ${TOKENS.border}`,
-                        
-                        // 🛰️ INTERACTIVITY STABILIZATION
+                        padding: '24px 40px 60px 40px', 
+                        background: 'linear-gradient(to bottom, rgba(5,5,8,0.95) 0%, rgba(5,5,8,0.5) 40%, transparent 100%)',
+                        backdropFilter: 'blur(30px) saturate(180%)',
+                        borderBottom: `1px solid rgba(255,255,255,0.03)`,
                         opacity: isHudVisible ? 1 : 0,
                         pointerEvents: isHudVisible ? 'auto' : 'none',
                         transform: `translateY(${isHudVisible ? '0' : '-10px'})`,
                         transition: 'opacity 0.4s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)'
                     }}
                 >
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'nowrap' }}>
                         {/* 📡 STEALTH LOGO & BADGE (Left) */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: -1, color: 'white', fontFamily: TOKENS.font, display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                                BETO.PORTFOLIO <span style={{ fontSize: 9, opacity: 0.4, color: TOKENS.accent, fontWeight: 900, letterSpacing: 3 }}>SYSTEM_CORE</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexShrink: 0 }}>
+                            <div style={{ fontSize: 18, fontWeight: 950, letterSpacing: -0.5, color: 'white', fontFamily: TOKENS.font, display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                                BETO<span style={{ opacity: 0.3, fontWeight: 400 }}>.PORTFOLIO</span>
+                                <span style={{ fontSize: 8, opacity: 0.5, color: TOKENS.accent, fontWeight: 900, letterSpacing: 2, marginLeft: 5 }}>FORCE_SYNC_v1.1</span>
                             </div>
+                            
                             <div style={{ 
-                                fontSize: 9, color: TOKENS.accent, fontWeight: 900, letterSpacing: 2, 
-                                border: `1px solid ${TOKENS.accent}33`, padding: '4px 10px', borderRadius: 2, 
-                                background: 'rgba(168, 85, 247, 0.05)', display: 'inline-block', alignSelf: 'flex-start'
+                                fontSize: 8, color: TOKENS.accent, fontWeight: 900, letterSpacing: 1.5, 
+                                border: `1px solid ${TOKENS.accent}22`, padding: '3px 8px', borderRadius: 40, 
+                                background: 'rgba(168, 85, 247, 0.05)', display: 'flex', alignItems: 'center', gap: 6
                             }}>
-                                PROTOCOL_DOSSIER // USER: {String(resumeData?.about?.name || 'BETO').toUpperCase()}
+                                <div style={{ width: 4, height: 4, borderRadius: '50%', background: TOKENS.accent }} />
+                                {String(resumeData?.about?.name || 'BETO').toUpperCase()} // DOSSIER_LOGGED
                             </div>
                         </div>
 
                         {/* 🕹️ COMMAND CONTROLS (Right) */}
-                        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: 15, alignItems: 'center', flexShrink: 0 }}>
+                            {status !== "IDLE" && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 15 }}>
+                                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: TOKENS.accent, animation: 'urb-pulse-dot 1s infinite' }} />
+                                    <div style={{ fontSize: 8, color: TOKENS.accent, fontFamily: TOKENS.fontMono, opacity: 0.8 }}>
+                                        {status}
+                                    </div>
+                                </div>
+                            )}
 
-                        {status !== "IDLE" && (
-                            <div style={{ fontSize: 9, color: TOKENS.accent, marginRight: 15, fontFamily: TOKENS.fontMono, opacity: 0.8, animation: 'urb-pulse 2s infinite' }}>
-                                [SYSTEM_STATUS: {status}]
+                            <div className="urb-hud-strip">
+                                <button className="urb-icon-btn" onMouseEnter={() => setHoveredBtn("EXPORT_PDF")} onMouseLeave={() => setHoveredBtn(null)} onClick={() => setExportMode(true)}>
+                                    <dc.Icon icon="file-text" style={{ width: 14 }} />
+                                    {renderTooltip("EXPORT_PDF")}
+                                </button>
+                                
+                                <button 
+                                    className={`urb-icon-btn primary ${isDeploying ? 'active' : ''}`} 
+                                    onMouseEnter={() => setHoveredBtn("COMPILE_LOCAL")} onMouseLeave={() => setHoveredBtn(null)}
+                                    onClick={handleDeploy}
+                                    disabled={isDeploying || isPublishing}
+                                >
+                                    <dc.Icon icon={isDeploying ? "loader" : "zap"} style={{ width: 14 }} />
+                                    {renderTooltip("COMPILE_LOCAL")}
+                                </button>
+
+                                <button 
+                                    className={`urb-icon-btn ${isPublishing ? 'active' : ''}`} 
+                                    onMouseEnter={() => setHoveredBtn("PUB_PLUGIN")} onMouseLeave={() => setHoveredBtn(null)}
+                                    onClick={handlePublish}
+                                    disabled={isPublishing || isDeploying}
+                                >
+                                    <dc.Icon icon={isPublishing ? "loader" : "github"} style={{ width: 14 }} />
+                                    {renderTooltip("PUB_PLUGIN")}
+                                </button>
+
+                                <button 
+                                    className={`urb-icon-btn web ${isPublishing ? 'active' : ''}`} 
+                                    onMouseEnter={() => setHoveredBtn("PUB_WEB")} onMouseLeave={() => setHoveredBtn(null)}
+                                    onClick={handleWebPublish}
+                                    disabled={isPublishing || isDeploying}
+                                >
+                                    <dc.Icon icon={isPublishing ? "loader" : "globe"} style={{ width: 14 }} />
+                                    {renderTooltip("PUB_WEB")}
+                                </button>
+
+                                <div style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.1)', margin: '0 4px' }} />
+
+                                <button className={`urb-icon-btn ${showSettings ? 'active' : ''}`} onMouseEnter={() => setHoveredBtn("SETTINGS")} onMouseLeave={() => setHoveredBtn(null)} onClick={() => setShowSettings(!showSettings)}>
+                                    <dc.Icon icon="settings" style={{ width: 14 }} />
+                                    {renderTooltip("SETTINGS")}
+                                </button>
+
+                                <button className="urb-icon-btn danger" onMouseEnter={() => setHoveredBtn("EXIT_SYSTEM")} onMouseLeave={() => setHoveredBtn(null)} onClick={() => {
+                                        if (dc?.app?.workspace?.activeLeaf) dc.app.workspace.activeLeaf.detach();
+                                        else window.close();
+                                    }}>
+                                    <dc.Icon icon="log-out" style={{ width: 14 }} />
+                                    {renderTooltip("EXIT_SYSTEM")}
+                                </button>
                             </div>
-                        )}
-                        <button className="urb-act-btn" onClick={() => setExportMode(true)} style={{ padding: '10px 18px' }}>PDF_PROTO</button>
-                        
-                        <button 
-                            className={`urb-act-btn ${isDeploying ? 'active' : ''}`} 
-                            onClick={handleDeploy}
-                            disabled={isDeploying || isPublishing}
-                            style={{ padding: '10px 18px' }}
-                            title="Compile & Deploy to Obsidian"
-                        >
-                            <dc.Icon icon={isDeploying ? "loader" : "zap"} style={{ width: 12, marginRight: isDeploying ? 0 : 6 }} />
-                            {!isDeploying && "COMPILE"}
-                        </button>
-
-                        <button 
-                            className={`urb-act-btn ${isPublishing ? 'active' : ''}`} 
-                            onClick={handlePublish}
-                            disabled={isPublishing || isDeploying}
-                            style={{ border: `1px solid ${TOKENS.accent}44`, padding: '10px 18px' }}
-                            title="One-Click Publish to GitHub"
-                        >
-                            <dc.Icon icon={isPublishing ? "loader" : "github"} style={{ width: 12, marginRight: isPublishing ? 0 : 6 }} />
-                            {!isPublishing && "PUBLISH"}
-                        </button>
-
-                        <button className={`urb-act-btn ${showSettings ? 'active' : ''}`} 
-                            onClick={() => {
-                                console.log("%c[App] COMMAND: SETTINGS_TOGGLE", "background: #a855f7; color: #fff; font-weight: bold; padding: 2px 5px; border-radius: 2px;");
-                                setShowSettings(!showSettings);
-                            }}
-                            style={{ padding: '10px 14px' }}
-                        >
-                            <dc.Icon icon="settings" style={{ width: 14 }} />
-                        </button>
-                        <button className="urb-act-btn" 
-                            onClick={() => {
-                                console.log("%c[App] COMMAND: EXIT_CLEANUP", "background: #ef4444; color: #fff; font-weight: bold; padding: 2px 5px; border-radius: 2px;");
-                                dc.app.workspace.activeLeaf?.detach();
-                            }}
-                            style={{ padding: '10px 18px' }}
-                        >EXIT</button>
+                        </div>
                     </div>
-                </div>
-
                     <MCPBridge folderPath={folderPath} dc={dc} modules={modules} onReload={() => dc.app.workspace.activeLeaf?.rebuildView?.()} />
                 </div>
             )}

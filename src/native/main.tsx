@@ -96,8 +96,9 @@ class DossierView extends ItemView {
         // 🛡️ NATIVE ICON BRIDGE
         const Icon = ({ icon, style }) => {
             const icons = {
-                zap: '⚡', github: '🌐', settings: '⚙️', loader: '⏳', 
-                target: '🎯', terminal: '📟', activity: '📈', database: '🗄️'
+                zap: '⚡', github: '🐙', settings: '⚙️', loader: '⏳', 
+                target: '🎯', terminal: '📟', activity: '📈', database: '🗄️',
+                'file-text': '📄', globe: '🌐', 'log-out': '⏻'
             };
             return <span style={{ ...style, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{icons[icon] || '◆'}</span>;
         };
