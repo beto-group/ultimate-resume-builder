@@ -139,7 +139,7 @@ function getDeploymentLogic(dc) {
             // 0. Alpha-Bump & Native Transpilation (esbuild)
             let pushVersion = "1.0.0";
             const distPath = path.join(componentPath, "main.js");
-            const nativeEntry = path.join(componentPath, "src", "native", "main.jsx");
+            const nativeEntry = path.join(componentPath, "src", "native", "main.tsx");
 
             console.log("[Deployment] Orchestrating Native Build (esbuild)...");
             if (fs.existsSync(nativeEntry)) {
@@ -154,17 +154,15 @@ function getDeploymentLogic(dc) {
                         console.log("[Deployment] ESBUILD_SUCCESS: Native bundle generated.");
                         addLog("AUTO_BUNDLING_SUCCESS");
                     }
+                    console.log("[Deployment] PATH_SYNC_SUCCESS: Native entry identified.");
                 } catch (e) {
                     console.error("[Deployment] ESBUILD_FAILED:", e.message);
                     addLog("AUTO_BUNDLING_FAILED");
-                    // Fallback to simple copy if esbuild fails (unlikely given check)
-                    const srcPath = path.join(componentPath, "src", "index.jsx");
-                    if (fs.existsSync(srcPath)) fs.copyFileSync(srcPath, distPath);
+                    // ⛔ DO NOT fallback to raw JSX copy (it causes SyntaxErrors in native)
                 }
             } else {
-                console.warn("[Deployment] NATIVE_ENTRY_MISSING: Falling back to source copy.");
-                const srcPath = path.join(componentPath, "src", "index.jsx");
-                if (fs.existsSync(srcPath)) fs.copyFileSync(srcPath, distPath);
+                console.error("[Deployment] NATIVE_ENTRY_MISSING: main.tsx not found in src/native.");
+                addLog("NATIVE_ENTRY_MISSING");
             }
 
             if (fs.existsSync(manifestPath)) {
