@@ -495,6 +495,22 @@ function App({ dc, modules, folderPath, onExport }) {
                             <input className="urb-input" placeholder="DEPLOY_REPO_ID" value={repoName} onChange={e => setRepoName(e.target.value)} />
                             <input className="urb-input" type="password" placeholder="GH_AUTH_TOKEN_ACTIVE" value={ghToken} onChange={e => updateToken(e.target.value)} />
                             
+                            <button className="urb-act-btn" style={{ 
+                                padding: '10px', 
+                                background: 'rgba(16, 185, 129, 0.1)', 
+                                border: '1px solid #10b98144',
+                                color: '#10b981',
+                                fontSize: 9,
+                                fontWeight: 900,
+                                letterSpacing: 1
+                            }} onClick={() => {
+                                const url = `https://github.com/beto-group/${repoName}`;
+                                window.open(url, '_blank');
+                            }}>
+                                <dc.Icon icon="github" style={{ width: 10, marginRight: 6 }} />
+                                VISIT_REPOSITORY
+                            </button>
+
                             <div style={{ marginTop: 10 }}>
                                 <DeployBridge 
                                     TOKENS={TOKENS} 

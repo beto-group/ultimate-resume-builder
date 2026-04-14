@@ -136,8 +136,18 @@ function getDeploymentLogic(dc) {
                 manifest: getRel(manifestPath) 
             });
 
-            // 0. Auto-Bump Version for Publish
+            // 0. Alpha-Bump & BRAT Validation
             let pushVersion = "1.0.0";
+            const distPath = path.join(componentPath, "main.js");
+            const hasMainJs = fs.existsSync(distPath);
+
+            if (!hasMainJs) {
+                console.warn("%c[Deployment] BRAT_WARNING: 'main.js' is missing in root. BRAT installation will fail.", "color: #f59e0b; font-weight: bold;");
+                addLog("BRAT_ASSET_MISSING");
+            } else {
+                console.log("%c[Deployment] BRAT_VALIDATION: 'main.js' detected. Ready for sync.", "color: #10b981; font-weight: bold;");
+            }
+
             if (fs.existsSync(manifestPath)) {
                 try {
                     const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
