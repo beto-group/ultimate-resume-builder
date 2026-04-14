@@ -243,13 +243,13 @@ function getDeploymentLogic(dc) {
             // 3. Git Pipeline
             const cmd = `
                 git init && 
-                git config user.name "${login}" && 
-                git config user.email "${login}@users.noreply.github.com" &&
+                git checkout -b main || git checkout main &&
+                git remote add origin ${authedUrl} || git remote set-url origin ${authedUrl} && 
                 git add -A && 
-                (git commit -m "Dossier Update [${tag}]" --allow-empty || true) && 
-                git branch -M main && 
-                (git remote add origin ${authedUrl} || git remote set-url origin ${authedUrl}) && 
-                git push -u origin main --force
+                git commit -m "Dossier Update [v${pushVersion}]" && 
+                git tag v${pushVersion} &&
+                git push -u origin main --force &&
+                git push origin --tags
             `;
 
             console.log("[Deployment] Executing Git Push...");
